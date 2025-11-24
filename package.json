@@ -1,0 +1,12 @@
+{
+  "name": "sbom-sca-demo-node",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Demo app for SBOM+SCA pipeline (Node.js)",
+  "main": "app.js",
+  "scripts": { "start": "node app.js" },
+  "dependencies": {
+    "express": "4.18.2",
+    "lodash": "4.17.21"
+  }
+}
