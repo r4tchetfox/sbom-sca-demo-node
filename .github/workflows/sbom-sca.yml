@@ -26,13 +26,13 @@ jobs:
       - name: SCA scan (JSON + table)
         run: |
           grype sbom:sbom.cdx.json -o json  > sca.json
-        #  Табличний звіт як текстовий файл HTML-таблиці:
           grype sbom:sbom.cdx.json -o table > sca.html
 
-      - name: Policy Gate
+      - name: Policy Gate (BLOCK on High+Critical)
         run: python3 .github/policy_gate.py sca.json
 
-      - name: Upload artifacts
+      - name: Upload artifacts (always)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sbom-sca-${{ github.sha }}
@@ -40,3 +40,4 @@ jobs:
             sbom.cdx.json
             sca.json
             sca.html
+
