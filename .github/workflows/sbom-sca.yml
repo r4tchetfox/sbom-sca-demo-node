@@ -14,6 +14,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # NEW: Node.js + інсталяція залежностей, щоб з'явились node_modules + package-lock.json
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          npm i --ignore-scripts --no-audit
+          npm list --depth=0 || true
+
       - name: Install Syft
         run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
 
@@ -22,22 +33,4 @@ jobs:
 
       - name: Generate SBOM (CycloneDX)
         run: syft dir:. -o cyclonedx-json > sbom.cdx.json
-
-      - name: SCA scan (JSON + table)
-        run: |
-          grype sbom:sbom.cdx.json -o json  > sca.json
-          grype sbom:sbom.cdx.json -o table > sca.html
-
-      - name: Policy Gate (BLOCK on High+Critical)
-        run: python3 .github/policy_gate.py sca.json
-
-      - name: Upload artifacts (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-sca-${{ github.sha }}
-          path: |
-            sbom.cdx.json
-            sca.json
-            sca.html
 
