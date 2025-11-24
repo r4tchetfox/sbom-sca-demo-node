@@ -1,12 +1,14 @@
 name: sbom-sca
+
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
   pull_request:
   release:
     types: [ published ]
   schedule:
-    - cron: '0 1 * * *'   # 01:00 UTC ≈ 03:00 Europe/Kyiv
+    - cron: '0 1 * * *'     # 01:00 UTC ≈ 03:00 Kyiv
 
 jobs:
   scan:
@@ -14,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # NEW: Node.js + інсталяція залежностей, щоб з'явились node_modules + package-lock.json
+      # 1) Готуємо Node-проєкт, щоб з'явилися node_modules та lock-файл
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -23,14 +25,48 @@ jobs:
       - name: Install dependencies
         run: |
           npm i --ignore-scripts --no-audit
-          npm list --depth=0 || true
+          npm ls --depth=0 || true
 
+      # 2) Інструменти
       - name: Install Syft
         run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
 
       - name: Install Grype
         run: curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
 
+      # 3) Генерація SBOM і SCA
       - name: Generate SBOM (CycloneDX)
         run: syft dir:. -o cyclonedx-json > sbom.cdx.json
 
+      - name: SCA scan (JSON + table)
+        run: |
+          grype sbom:sbom.cdx.json -o json  > sca.json
+          grype sbom:sbom.cdx.json -o table > sca.html
+
+      # 4) Діагностика: покажи, що файли існують
+      - name: List workspace
+        if: always()
+        run: |
+          pwd
+          ls -la
+          echo "---- file sizes ----"
+          [ -f sbom.cdx.json ] && wc -c sbom.cdx.json || echo "no sbom.cdx.json"
+          [ -f sca.json ] && wc -c sca.json || echo "no sca.json"
+          [ -f sca.html ] && wc -c sca.html || echo "no sca.html"
+
+      # 5) Policy gate (можеш увімкнути блок, але не валити весь job)
+      - name: Policy Gate (BLOCK on High+Critical)
+        run: python3 .github/policy_gate.py sca.json
+        continue-on-error: true   # <-- щоб артефакти 100% завантажились
+
+      # 6) Завантаж артефакти завжди
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-sca-${{ github.sha }}
+          path: |
+            sbom.cdx.json
+            sca.json
+            sca.html
+          retention-days: 7
