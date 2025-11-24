@@ -1,0 +1,42 @@
+name: sbom-sca
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  release:
+    types: [ published ]
+  schedule:
+    - cron: '0 1 * * *'   # 01:00 UTC ≈ 03:00 Europe/Kyiv
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Syft
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Install Grype
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Generate SBOM (CycloneDX)
+        run: syft dir:. -o cyclonedx-json > sbom.cdx.json
+
+      - name: SCA scan (JSON + table)
+        run: |
+          grype sbom:sbom.cdx.json -o json  > sca.json
+        #  Табличний звіт як текстовий файл HTML-таблиці:
+          grype sbom:sbom.cdx.json -o table > sca.html
+
+      - name: Policy Gate
+        run: python3 .github/policy_gate.py sca.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-sca-${{ github.sha }}
+          path: |
+            sbom.cdx.json
+            sca.json
+            sca.html
